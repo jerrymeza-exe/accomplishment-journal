@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "journal",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["app.py", "--no-browser", "--port", "3222"],
+      "port": 3222,
+      "autoPort": false
+    }
+  ]
+}

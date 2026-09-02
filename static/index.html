@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="A private, local-first journal for recording completed work and professional accomplishments." />
+  <meta name="theme-color" content="#08090a" />
+  <meta name="color-scheme" content="dark" />
+  <title>Accomplishment Journal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <button type="button" class="topbar-open mono" id="topbar-open">
+      <i aria-hidden="true"></i>Projects
+    </button>
+    <span class="topbar-now" id="topbar-now">No project selected</span>
+  </header>
+
+  <div class="scrim" id="scrim" hidden aria-hidden="true"></div>
+
+  <div class="shell">
+    <aside class="rail" id="rail" aria-label="Journal projects">
+      <div class="rail-brand mono"><span class="mark" aria-hidden="true"></span>Accomplishment Journal</div>
+
+      <div class="rail-index mono">
+        <span>Projects <b id="rail-count">00</b></span>
+        <button type="button" id="rail-new">+ New</button>
+      </div>
+
+      <label class="rail-search" id="rail-search">
+        <span class="mono" aria-hidden="true">/</span>
+        <span class="sr-only">Search projects</span>
+        <input id="search" placeholder="Filter" />
+      </label>
+
+      <nav class="rail-list" id="rail-list"></nav>
+
+      <div class="rail-foot">
+        <div class="rail-ops mono">
+          <button type="button" id="op-backup">Backup</button>
+          <button type="button" id="op-restore">Restore</button>
+          <button type="button" id="op-csv" disabled>CSV</button>
+        </div>
+        <p class="rail-keys mono">N entry · P project · / find</p>
+        <p class="rail-note mono"><i aria-hidden="true"></i>Saved on this device · Private</p>
+      </div>
+    </aside>
+
+    <input class="sr-only" type="file" accept="application/json,.json" id="import" />
+
+    <main class="work" id="work"></main>
+  </div>
+
+  <output class="notice" id="notice" hidden>
+    <span id="notice-text"></span>
+    <button type="button" class="notice-act mono" id="notice-action" hidden></button>
+    <button type="button" aria-label="Dismiss message" id="notice-close">×</button>
+  </output>
+
+  <!-- ------------------------------------------------ project sheet ---- -->
+  <dialog id="sheet" class="sheet" aria-label="New project">
+    <div class="bar">
+      <div class="bar-label mono"><span class="mark" aria-hidden="true"></span><span id="sheet-title">New project</span></div>
+      <div class="bar-ops mono">
+        <button type="button" id="sheet-close">Close</button>
+      </div>
+    </div>
+
+    <form id="project-form" class="form">
+      <div class="form-body">
+        <label class="field">
+          <span class="mono">Project name</span>
+          <input id="pf-name" class="inp" required placeholder="Systems integration highlights" />
+        </label>
+
+        <label class="field">
+          <span class="mono">Context <em>Optional</em></span>
+          <textarea id="pf-desc" class="inp" placeholder="A short reminder of the role, client, or body of work this project covers."></textarea>
+        </label>
+
+        <label class="field">
+          <span class="mono">Project start</span>
+          <input id="pf-start" class="inp" type="date" />
+        </label>
+
+        <label class="field">
+          <span class="mono">Tags <em>Comma separated</em></span>
+          <input id="pf-tags" class="inp" placeholder="Integration, review cycle, leadership" />
+        </label>
+      </div>
+
+      <div class="form-foot mono">
+        <button type="button" class="link" id="pf-cancel">Cancel</button>
+        <button type="submit" class="act" id="pf-submit">Create project</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ------------------------------------------------------- writer ---- -->
+  <dialog id="writer" class="writer" aria-label="New entry">
+    <div class="bar">
+      <div class="bar-label mono"><span class="mark" aria-hidden="true"></span><span id="writer-title">New entry</span></div>
+      <div class="bar-ops mono">
+        <button type="button" id="btn-preview" aria-pressed="true">Preview</button>
+        <button type="button" id="btn-focus" aria-pressed="false">Focus</button>
+        <button type="button" id="writer-close">Close</button>
+        <button type="submit" form="entry-form" class="act" id="btn-record">Record</button>
+      </div>
+    </div>
+
+    <form id="entry-form" class="writer-scroll">
+      <div class="writer-col">
+        <div id="writer-meta" class="writer-meta">
+          <label class="field">
+            <span class="mono">Project</span>
+            <select id="ef-project" class="inp" required></select>
+          </label>
+          <label class="field">
+            <span class="mono">Date</span>
+            <input id="ef-date" class="inp" type="date" required />
+          </label>
+          <label class="field">
+            <span class="mono">Milestone <em>Optional</em></span>
+            <input id="ef-milestone" class="inp" placeholder="Design review" />
+          </label>
+        </div>
+
+        <input id="ef-title" class="writer-title" required aria-label="Entry title" placeholder="Entry title" />
+
+        <div id="writer-grid" class="writer-grid">
+          <div class="writer-pane">
+            <textarea
+              id="ef-markdown"
+              required
+              aria-label="Entry log, Markdown"
+              placeholder="## What happened&#10;&#10;Completed the review cycle and aligned stakeholders on the handoff.&#10;&#10;**Impact**&#10;&#10;Reduced rework and gave the team a clear path forward.">
+            </textarea>
+          </div>
+          <div id="writer-preview" class="writer-preview">
+            <p class="mono">Preview</p>
+            <div id="preview-body"></div>
+          </div>
+        </div>
+
+        <p class="writer-hints mono">
+          <span><code># </code>heading</span>
+          <span><code>- </code>list</span>
+          <span><code>1. </code>numbered list</span>
+          <span><code>&gt; </code>note</span>
+          <span><code>`code`</code></span>
+          <span><code>```</code>block</span>
+          <span><code>[text](url)</code></span>
+          <span><kbd>Ctrl</kbd> <kbd>Enter</kbd> save</span>
+          <span><kbd>Esc</kbd> close</span>
+        </p>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
