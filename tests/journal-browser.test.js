@@ -139,3 +139,30 @@ test('an unknown journal version is still refused', () => {
     /incompatible journal version/,
   );
 });
+
+test('an entry never imports with its writing blank', () => {
+  /* No write path in this journal can produce an empty entry body, so an
+     entry arriving without `markdown` is a v1-shaped entry in a file labelled
+     v3. Its writing is still in the structured fields. */
+  const entry = {
+    id: 'e1', projectId: 'project-a', title: 'Kickoff', date: '2025-01-05',
+    createdAt: '2025-01-05T10:00:00.000Z', updatedAt: '2025-01-05T10:00:00.000Z',
+  };
+  const restore = (achievement) => normalizeBackup({
+    version: 3, projects: [LEGACY_PROJECT], achievements: [achievement],
+  }).achievements[0];
+
+  assert.equal(
+    restore({
+      ...entry, category: 'Delivery', description: 'Did the thing', impact: 'It worked',
+      skills: ['python', 'Review'], notes: 'Coordinated with two teams.',
+    }).markdown,
+    'Did the thing\n\n**Impact**\n\nIt worked\n\n- Tools / skills: python, Review\n\n> Coordinated with two teams.',
+  );
+
+  // Writing the entry already has wins over the structured fields.
+  assert.equal(restore({ ...entry, markdown: 'already fine', description: 'ignored' }).markdown, 'already fine');
+
+  // Nothing to recover is still imported, still empty: a recovery, not a refusal.
+  assert.equal(restore({ ...entry, markdown: '' }).markdown, '');
+});

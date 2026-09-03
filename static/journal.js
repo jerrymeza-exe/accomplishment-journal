@@ -171,7 +171,11 @@ function normalizedEntry(value, projectIds) {
     /* Journals written before the rename still label this `category`.
        Reading both means an older file keeps its milestones. */
     milestone: cleanText(value?.milestone) || cleanText(value?.category),
-    markdown: cleanText(value?.markdown),
+    /* An entry with no writing is something this journal cannot write: both
+       write paths refuse an empty body. So one here is a v1-shaped entry in a
+       file labelled v3, and its writing is still in the structured fields —
+       fold it rather than store the entry blank. */
+    markdown: cleanText(value?.markdown) || legacyMarkdown(value, cleanText(value?.description)),
     createdAt: requiredText(value?.createdAt, 'Backup has an invalid accomplishment creation date.'),
     updatedAt: requiredText(value?.updatedAt, 'Backup has an invalid accomplishment update date.'),
   };
