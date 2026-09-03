@@ -52,3 +52,90 @@ test('the Pages CSV matches the local export shape', async () => {
   assert.equal(csv.name, 'phone-launch-log.csv');
   assert.equal(await csv.blob.text(), 'project,date,milestone,title,markdown\r\n"Phone Launch","2026-09-02","Live","Published","Opened on my phone"');
 });
+
+/* The hosted build is the only journal some people have: it has to read the
+   older backup formats the Python app reads, or their milestones arrive
+   blank — or, before this, not at all. */
+
+const LEGACY_PROJECT = {
+  id: 'project-a',
+  name: 'Legacy Work',
+  description: '',
+  startedOn: '2025-01-01',
+  tags: [],
+  updatedAt: '2025-01-01T00:00:00.000Z',
+};
+
+test('a v1 backup restores, and its category becomes the milestone', () => {
+  const restored = normalizeBackup({
+    version: 1,
+    projects: [LEGACY_PROJECT],
+    achievements: [{
+      id: 'e1', projectId: 'project-a', title: 'Kickoff', date: '2025-01-05',
+      category: 'Delivery', description: 'Did the thing', impact: 'It worked',
+      skills: ['python', 'Review'], notes: 'Coordinated with two teams.',
+      createdAt: '2025-01-05T10:00:00.000Z', updatedAt: '2025-01-05T10:00:00.000Z',
+    }],
+  });
+
+  assert.equal(restored.version, 3);
+  assert.equal(restored.achievements[0].milestone, 'Delivery');
+  assert.equal(
+    restored.achievements[0].markdown,
+    'Did the thing\n\n**Impact**\n\nIt worked\n\n- Tools / skills: python, Review\n\n> Coordinated with two teams.',
+  );
+});
+
+test('a v1 entry with no category is filed under General', () => {
+  const restored = normalizeBackup({
+    version: 1,
+    projects: [LEGACY_PROJECT],
+    achievements: [{
+      id: 'e1', projectId: 'project-a', title: 'Kickoff', date: '2025-01-05',
+      category: '', description: 'Plain', impact: '', skills: [], notes: '',
+      createdAt: '2025-01-05T10:00:00.000Z', updatedAt: '2025-01-05T10:00:00.000Z',
+    }],
+  });
+  assert.equal(restored.achievements[0].milestone, 'General');
+});
+
+test('a v2 backup restores and drops the retired status field', () => {
+  const restored = normalizeBackup({
+    version: 2,
+    projects: [{ ...LEGACY_PROJECT, status: 'Complete' }],
+    achievements: [{
+      id: 'e1', projectId: 'project-a', title: 'Kickoff', date: '2025-01-05',
+      milestone: 'Delivery', markdown: '- [x] Did it',
+      createdAt: '2025-01-05T10:00:00.000Z', updatedAt: '2025-01-05T10:00:00.000Z',
+    }],
+  });
+  assert.equal(restored.version, 3);
+  assert.equal(restored.achievements[0].milestone, 'Delivery');
+  assert.ok(!('status' in restored.projects[0]));
+});
+
+test('a milestone still labelled category survives into the export', async () => {
+  const restored = normalizeBackup({
+    version: 3,
+    projects: [LEGACY_PROJECT],
+    achievements: [{
+      id: 'e1', projectId: 'project-a', title: 'Kickoff', date: '2025-01-05',
+      category: 'Delivery', markdown: 'Did it',
+      createdAt: '2025-01-05T10:00:00.000Z', updatedAt: '2025-01-05T10:00:00.000Z',
+    }],
+  });
+  assert.equal(restored.achievements[0].milestone, 'Delivery');
+
+  const csv = projectCsv(restored, 'project-a');
+  assert.equal(
+    await csv.blob.text(),
+    'project,date,milestone,title,markdown\r\n"Legacy Work","2025-01-05","Delivery","Kickoff","Did it"',
+  );
+});
+
+test('an unknown journal version is still refused', () => {
+  assert.throws(
+    () => normalizeBackup({ version: 4, projects: [], achievements: [] }),
+    /incompatible journal version/,
+  );
+});

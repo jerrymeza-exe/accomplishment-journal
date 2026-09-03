@@ -149,7 +149,10 @@ def _valid_achievements(value: Any, project_ids: set[str]) -> list[dict[str, Any
                 "projectId": project_id,
                 "title": _required_string(item.get("title"), "accomplishment title"),
                 "date": _valid_date(item.get("date"), "accomplishment date"),
-                "milestone": _optional_string(item.get("milestone")),
+                # Journals written before the rename still label this
+                # ``category``. Reading both means an older file keeps its
+                # milestones instead of importing them as blanks.
+                "milestone": _optional_string(item.get("milestone")) or _optional_string(item.get("category")),
                 "markdown": _optional_string(item.get("markdown")),
                 "createdAt": _required_string(item.get("createdAt"), "accomplishment creation date"),
                 "updatedAt": _required_string(item.get("updatedAt"), "accomplishment update date"),
