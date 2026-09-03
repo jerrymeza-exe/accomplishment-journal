@@ -261,6 +261,95 @@ def test_export_project_log() -> None:
     check("export leaves other projects out", "kept out" not in csv_text)
 
 
+def test_export_carries_the_milestone() -> None:
+    """The exported row's milestone column was only ever asserted empty.
+
+    Every entry with a milestone in ``_export_state`` belongs to the project
+    the export leaves out, so a milestone that never reached the CSV would not
+    have failed a single test.
+    """
+    state = _export_state()
+    state["achievements"][0] = {**state["achievements"][0], "milestone": "Phase 1"}
+    _, body = tracker.export_project_log(state, "p1")
+    csv_text = body.decode("utf-8")
+
+    import csv as _csv, io as _io
+    row = list(_csv.reader(_io.StringIO(csv_text)))[1]
+    check("export carries the milestone", row[2] == "Phase 1", repr(row))
+
+
+def test_a_milestone_labelled_category_survives() -> None:
+    """Journals written before the rename label the milestone ``category``.
+
+    They used to validate cleanly with every milestone quietly emptied, so the
+    loss only showed up as a blank column in an export.
+    """
+    state = _export_state()
+    entry = {k: v for k, v in state["achievements"][0].items() if k != "milestone"}
+    state["achievements"][0] = {**entry, "category": "Phase 1"}
+
+    validated = tracker.validate_tracker_state(state)
+    check("category is read as the milestone",
+          validated["achievements"][0]["milestone"] == "Phase 1",
+          repr(validated["achievements"][0]))
+
+    _, body = tracker.export_project_log(validated, "p1")
+    check("a category-labelled milestone reaches the CSV",
+          b'"Phase 1"' in body, repr(body))
+
+    # An entry that carries both keeps the current name.
+    state["achievements"][0] = {**entry, "category": "Old", "milestone": "New"}
+    validated = tracker.validate_tracker_state(state)
+    check("milestone wins over category",
+          validated["achievements"][0]["milestone"] == "New",
+          repr(validated["achievements"][0]))
+
+
+def test_an_entry_never_imports_with_its_writing_blank() -> None:
+    """No write path in this journal can produce an empty entry body.
+
+    ``record_entry`` and ``update_entry`` both refuse one, and the v1 fold
+    requires a description. So an entry arriving without ``markdown`` is a
+    v1-shaped entry in a file labelled v3 — its writing is still in the
+    structured fields, and blanking it loses the whole entry rather than a
+    label.
+    """
+    state = _export_state()
+    base = {k: v for k, v in state["achievements"][0].items() if k != "markdown"}
+    state["achievements"][0] = {
+        **base,
+        "description": "Did the thing",
+        "impact": "It worked",
+        "skills": ["python", "Review"],
+        "notes": "Coordinated with two teams.",
+    }
+    validated = tracker.validate_tracker_state(state)
+    recovered = validated["achievements"][0]["markdown"]
+    check("a v1-shaped entry keeps its writing",
+          recovered == "Did the thing\n\n**Impact**\n\nIt worked"
+                       "\n\n- Tools / skills: python, Review"
+                       "\n\n> Coordinated with two teams.",
+          repr(recovered))
+
+    _, body = tracker.export_project_log(validated, "p1")
+    check("the recovered writing reaches the CSV", b"Did the thing" in body, repr(body))
+
+    # An entry that already has writing keeps exactly what it had.
+    state["achievements"][0] = {**base, "markdown": "already fine", "description": "ignored"}
+    validated = tracker.validate_tracker_state(state)
+    check("existing writing wins over the structured fields",
+          validated["achievements"][0]["markdown"] == "already fine",
+          repr(validated["achievements"][0]["markdown"]))
+
+    # An entry with nothing to recover is still imported, still empty: this
+    # adds a recovery, it does not add a refusal.
+    state["achievements"][0] = {**base, "markdown": ""}
+    validated = tracker.validate_tracker_state(state)
+    check("an entry with nothing to recover still imports",
+          validated["achievements"][0]["markdown"] == "",
+          repr(validated["achievements"][0]["markdown"]))
+
+
 def test_export_edges() -> None:
     state = _export_state()
 
@@ -291,6 +380,9 @@ def main() -> int:
         test_validate_v3,
         test_migrate_legacy,
         test_export_project_log,
+        test_export_carries_the_milestone,
+        test_a_milestone_labelled_category_survives,
+        test_an_entry_never_imports_with_its_writing_blank,
         test_export_edges,
     ):
         print(f"{test.__name__}")

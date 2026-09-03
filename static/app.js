@@ -528,6 +528,13 @@ async function exportBackup() {
   }
 }
 
+/* The name the server already chose for a download, so a file does not arrive
+   under one name from the local app and another from the hosted one. */
+function downloadName(response, fallback) {
+  const match = /filename="([^"]*)"/.exec(response.headers.get('Content-Disposition') ?? '');
+  return match?.[1] || fallback;
+}
+
 async function exportCsv() {
   const { active } = currentView();
   if (!active) { setNotice('Choose a project before exporting its entries.'); return; }
@@ -538,7 +545,7 @@ async function exportCsv() {
     } else {
       const response = await fetch(`/api/export/csv?project=${encodeURIComponent(active.project.id)}`);
       if (!response.ok) throw new Error('The local server could not build the CSV.');
-      csv = { name: 'accomplishment-log.csv', blob: await response.blob() };
+      csv = { name: downloadName(response, 'accomplishment-log.csv'), blob: await response.blob() };
     }
     const { entryCount } = active;
     downloadFile(csv.name, csv.blob);

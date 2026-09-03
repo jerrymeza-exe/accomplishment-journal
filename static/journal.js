@@ -168,22 +168,72 @@ function normalizedEntry(value, projectIds) {
     projectId,
     title: requiredText(value?.title, 'Backup has an invalid accomplishment title.'),
     date: calendarDate(value?.date),
-    milestone: cleanText(value?.milestone),
-    markdown: cleanText(value?.markdown),
+    /* Journals written before the rename still label this `category`.
+       Reading both means an older file keeps its milestones. */
+    milestone: cleanText(value?.milestone) || cleanText(value?.category),
+    /* An entry with no writing is something this journal cannot write: both
+       write paths refuse an empty body. So one here is a v1-shaped entry in a
+       file labelled v3, and its writing is still in the structured fields —
+       fold it rather than store the entry blank. */
+    markdown: cleanText(value?.markdown) || legacyMarkdown(value, cleanText(value?.description)),
     createdAt: requiredText(value?.createdAt, 'Backup has an invalid accomplishment creation date.'),
     updatedAt: requiredText(value?.updatedAt, 'Backup has an invalid accomplishment update date.'),
   };
 }
 
+/* Fold a structured v1 accomplishment into a Markdown body. Mirrors
+   `tracker._legacy_markdown`, down to the section order and wording. */
+function legacyMarkdown(item, description) {
+  const sections = [description];
+  const impact = cleanText(item?.impact);
+  if (impact) sections.push(`**Impact**\n\n${impact}`);
+  const skills = Array.isArray(item?.skills)
+    ? item.skills.filter((skill) => typeof skill === 'string').map(cleanText).filter(Boolean)
+    : [];
+  if (skills.length) sections.push(`- Tools / skills: ${skills.join(', ')}`);
+  const notes = cleanText(item?.notes);
+  if (notes) sections.push(`> ${notes}`);
+  return sections.filter(Boolean).join('\n\n');
+}
+
+/* One v1 achievement, in the shape the current journal keeps. The label this
+   version called `category` is the milestone; the structured description,
+   impact, skills and notes become the entry's writing. */
+function migratedLegacyEntry(value, projectIds) {
+  const projectId = requiredText(value?.projectId, 'Backup has an invalid accomplishment project.');
+  if (!projectIds.has(projectId)) throw new Error('Backup includes an achievement with a missing project.');
+  const description = requiredText(value?.description, 'Backup has an invalid achievement description.');
+  return {
+    id: requiredText(value?.id, 'Backup has an invalid achievement ID.'),
+    projectId,
+    title: requiredText(value?.title, 'Backup has an invalid achievement title.'),
+    date: calendarDate(value?.date),
+    milestone: cleanText(value?.category) || 'General',
+    markdown: legacyMarkdown(value, description),
+    createdAt: requiredText(value?.createdAt, 'Backup has an invalid achievement creation date.'),
+    updatedAt: requiredText(value?.updatedAt, 'Backup has an invalid achievement update date.'),
+  };
+}
+
 export function normalizeBackup(candidate) {
   const value = candidate?.data ?? candidate;
-  if (!value || value.version !== 3 || !Array.isArray(value.projects) || !Array.isArray(value.achievements)) {
+  if (!value || typeof value !== 'object') {
+    throw new Error('This is not a compatible Accomplishment Journal backup.');
+  }
+  /* The hosted build is the only journal some people have, so it reads the
+     older formats the Python app reads rather than turning them away. */
+  if (![1, 2, 3].includes(value.version)) {
+    throw new Error('This backup was made by an incompatible journal version.');
+  }
+  if (!Array.isArray(value.projects) || !Array.isArray(value.achievements)) {
     throw new Error('This is not a compatible Accomplishment Journal backup.');
   }
   const projects = value.projects.map(normalizedProject);
   const projectIds = new Set(projects.map((project) => project.id));
   if (projectIds.size !== projects.length) throw new Error('Backup includes duplicate project IDs.');
-  const achievements = value.achievements.map((entry) => normalizedEntry(entry, projectIds));
+  const achievements = value.achievements.map((entry) => value.version === 1
+    ? migratedLegacyEntry(entry, projectIds)
+    : normalizedEntry(entry, projectIds));
   const entryIds = new Set(achievements.map((entry) => entry.id));
   if (entryIds.size !== achievements.length) throw new Error('Backup includes duplicate accomplishment IDs.');
   return { version: 3, projects, achievements };
