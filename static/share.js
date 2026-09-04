@@ -52,7 +52,7 @@ function renderSnapshot(snapshot) {
         h('span', {}, `${pad(view.entryCount)} entries`),
       ),
     ),
-    view.groups.map(groupNode),
+    ...view.groups.map(groupNode),
   );
 }
 
