@@ -116,3 +116,91 @@ export async function decodeSnapshot(payload) {
   const inflated = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
   return JSON.parse(new TextDecoder().decode(inflated));
 }
+
+/* ---------------------------------------------------------------- reading */
+
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function text(value) {
+  return typeof value === 'string' ? value : null;
+}
+
+function filled(value) {
+  const result = text(value);
+  return result && result.trim() ? result : null;
+}
+
+/**
+ * A version 1 snapshot, or `null` if this is not exactly one.
+ *
+ * Every field is checked. A snapshot that renders with a field missing is
+ * worse than one that refuses: the reader cannot tell an incomplete page from
+ * a short career, and the sender never finds out either way.
+ */
+function readVersion1(value) {
+  if (!isRecord(value) || !isRecord(value.project) || !Array.isArray(value.entries)) return null;
+  if (!value.entries.length) return null;
+
+  const who = text(value.who);
+  const name = filled(value.project.name);
+  const description = text(value.project.description);
+  const startedOn = filled(value.project.startedOn);
+  if (who === null || name === null || description === null || startedOn === null) return null;
+  if (!CALENDAR_DATE.test(startedOn)) return null;
+
+  const entries = [];
+  for (const candidate of value.entries) {
+    if (!isRecord(candidate)) return null;
+    const title = filled(candidate.title);
+    const date = filled(candidate.date);
+    const milestone = text(candidate.milestone);
+    const markdown = filled(candidate.markdown);
+    if (title === null || date === null || milestone === null || markdown === null) return null;
+    if (!CALENDAR_DATE.test(date)) return null;
+    entries.push({ title, date, milestone, markdown });
+  }
+
+  return {
+    version: 1,
+    who,
+    grouping: value.grouping === 'milestone' ? 'milestone' : 'date',
+    project: { name, description, startedOn },
+    entries,
+  };
+}
+
+/* A link cannot be re-sent once it is out, so every version this app has ever
+   written stays readable — see docs/adr/0004. Adding a format means adding a
+   reader here and leaving the others exactly as they are. */
+const READERS = { 1: readVersion1 };
+
+/**
+ * A snapshot from a URL fragment, or the named reason there isn't one.
+ *
+ * Answers with a reason rather than throwing because the four ways this fails
+ * read very differently to whoever opened the link, and only one of them is
+ * the sender's fault.
+ */
+export async function readSnapshot(fragment) {
+  const payload = String(fragment ?? '').replace(/^#/, '');
+  if (!payload) return { ok: false, reason: 'no-link' };
+  if (typeof DecompressionStream !== 'function') return { ok: false, reason: 'unsupported-browser' };
+
+  let candidate;
+  try {
+    candidate = await decodeSnapshot(payload);
+  } catch {
+    return { ok: false, reason: 'unreadable' };
+  }
+
+  if (!isRecord(candidate) || !Number.isInteger(candidate.version)) return { ok: false, reason: 'unreadable' };
+  const reader = READERS[candidate.version];
+  if (!reader) return { ok: false, reason: 'unsupported-version' };
+
+  const snapshot = reader(candidate);
+  return snapshot ? { ok: true, snapshot } : { ok: false, reason: 'unreadable' };
+}

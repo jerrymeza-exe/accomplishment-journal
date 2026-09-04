@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { SNAPSHOT_VERSION, decodeSnapshot, encodeSnapshot, snapshotFrom } from '../static/snapshot.js';
+import { SNAPSHOT_VERSION, decodeSnapshot, encodeSnapshot, readSnapshot, snapshotFrom } from '../static/snapshot.js';
 
 function journal() {
   return {
@@ -131,4 +131,94 @@ test('a truncated payload is rejected rather than half-read', async () => {
   for (const cut of [4, 12, payload.length - 8, payload.length - 1]) {
     await assert.rejects(() => decodeSnapshot(payload.slice(0, cut)), `expected a ${cut}-char prefix to be rejected`);
   }
+});
+
+async function payloadFor(mutate = () => {}) {
+  const snapshot = snapshotFrom(journal(), 'project-a', { who: 'G', grouping: 'milestone' });
+  mutate(snapshot);
+  return encodeSnapshot(snapshot);
+}
+
+test('a good fragment reads back, with or without its hash', async () => {
+  const payload = await payloadFor();
+  for (const fragment of [payload, `#${payload}`]) {
+    const result = await readSnapshot(fragment);
+    assert.equal(result.ok, true);
+    assert.equal(result.snapshot.project.name, 'Platform Migration');
+    assert.equal(result.snapshot.entries.length, 2);
+  }
+});
+
+test('no fragment is a different state from a broken one', async () => {
+  for (const fragment of ['', '#', null, undefined]) {
+    assert.deepEqual(await readSnapshot(fragment), { ok: false, reason: 'no-link' });
+  }
+});
+
+test('a truncated fragment refuses rather than rendering less', async () => {
+  const payload = await payloadFor();
+  assert.deepEqual(await readSnapshot(payload.slice(0, 20)), { ok: false, reason: 'unreadable' });
+  assert.deepEqual(await readSnapshot('garbage'), { ok: false, reason: 'unreadable' });
+});
+
+/* A link cannot be re-sent, so a payload from a newer build has to say so
+   rather than render whichever fields it happens to recognise. */
+test('a version this build does not know is named as such', async () => {
+  assert.deepEqual(
+    await readSnapshot(await payloadFor((snapshot) => { snapshot.version = 2; })),
+    { ok: false, reason: 'unsupported-version' },
+  );
+});
+
+test('a payload with no version at all is simply unreadable', async () => {
+  assert.deepEqual(
+    await readSnapshot(await payloadFor((snapshot) => { delete snapshot.version; })),
+    { ok: false, reason: 'unreadable' },
+  );
+});
+
+/* Every field is checked because there is no second chance: a snapshot that
+   lost its entries would otherwise render as a project with nothing in it. */
+test('a snapshot missing any required field is unreadable, not partial', async () => {
+  const cases = [
+    (snapshot) => { delete snapshot.project; },
+    (snapshot) => { delete snapshot.project.name; },
+    (snapshot) => { delete snapshot.entries; },
+    (snapshot) => { snapshot.entries = []; },
+    (snapshot) => { snapshot.entries = 'not an array'; },
+    (snapshot) => { delete snapshot.entries[0].title; },
+    (snapshot) => { delete snapshot.entries[0].markdown; },
+    (snapshot) => { snapshot.entries[0].date = 'not-a-date'; },
+  ];
+  for (const [index, mutate] of cases.entries()) {
+    assert.deepEqual(
+      await readSnapshot(await payloadFor(mutate)),
+      { ok: false, reason: 'unreadable' },
+      `case ${index} should be unreadable`,
+    );
+  }
+});
+
+test('a browser with no DecompressionStream is told so, not shown a broken page', async () => {
+  const real = globalThis.DecompressionStream;
+  delete globalThis.DecompressionStream;
+  try {
+    assert.deepEqual(await readSnapshot('anything'), { ok: false, reason: 'unsupported-browser' });
+  } finally {
+    globalThis.DecompressionStream = real;
+  }
+});
+
+/* Blank is legitimate for these three; absent is not. */
+test('an optional field may be blank but not missing', async () => {
+  const blank = await readSnapshot(await payloadFor((snapshot) => {
+    snapshot.who = '';
+    snapshot.project.description = '';
+    snapshot.entries[0].milestone = '';
+  }));
+  assert.equal(blank.ok, true);
+  assert.deepEqual(
+    await readSnapshot(await payloadFor((snapshot) => { delete snapshot.who; })),
+    { ok: false, reason: 'unreadable' },
+  );
 });
