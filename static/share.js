@@ -8,7 +8,7 @@
 
 import { h } from './dom.js';
 import { renderMarkdown } from './markdown.js';
-import { readSnapshot } from './snapshot.js';
+import { readSnapshot, SAFE_URL_LENGTH } from './snapshot.js';
 import { snapshotView } from './snapshot-view.js';
 
 const sheet = document.querySelector('#sheet');
@@ -89,10 +89,50 @@ function renderRefusal(reason) {
   );
 }
 
+/**
+ * The bar the sender sees, and the only place a link can be copied from.
+ *
+ * Copying from the rendered page rather than from the app is the whole of the
+ * consent gate: a snapshot cannot be withdrawn, so the one moment to notice
+ * what is in it is before the link exists anywhere else.
+ */
+function renderPreviewBar(params) {
+  const payload = window.location.hash.replace(/^#/, '');
+  const base = params.get('base');
+  const link = base ? `${base}#${payload}` : `${window.location.origin}${window.location.pathname}#${payload}`;
+
+  const copy = h('button', { type: 'button', class: 'preview-copy' }, 'Copy link');
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      copy.textContent = 'Copied';
+    } catch {
+      /* Clipboard access can be refused outright. Selecting the link is a
+         worse experience than copying it and a much better one than a button
+         that silently does nothing. */
+      window.prompt('Copy this link:', link);
+    }
+  });
+
+  const notes = [
+    h('p', { class: 'mono' }, 'Preview — this is what your recipient sees.'),
+    base && h('p', { class: 'mono' }, 'Shown from this machine; the link points at your published page.'),
+    link.length > SAFE_URL_LENGTH && h('p', { class: 'mono warn' },
+      `This link is ${link.length.toLocaleString()} characters. Some email programs break links this long by wrapping them — send it as a clickable link rather than pasted text.`),
+  ];
+
+  document.body.prepend(h('div', { class: 'preview-bar' }, notes, copy));
+}
+
 async function start() {
   const result = await readSnapshot(window.location.hash);
   if (result.ok) renderSnapshot(result.snapshot);
   else renderRefusal(result.reason);
+
+  /* The bar goes up only for a snapshot that actually rendered: offering to
+     copy a link that just refused to open is offering to send a broken one. */
+  const params = new URLSearchParams(window.location.search);
+  if (result.ok && params.get('preview') === '1') renderPreviewBar(params);
 }
 
 start();

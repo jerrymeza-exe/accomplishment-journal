@@ -156,6 +156,38 @@ body {
 .prose a { color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
 .prose strong { color: var(--ink); font-weight: 600; }
 
+/* ---- preview bar ----
+   Only the sender ever sees this; `?preview=1` is not part of the link. */
+
+.preview-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line-2);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.preview-bar p { margin: 0; text-transform: none; letter-spacing: 0.02em; }
+.preview-bar .warn { color: var(--ink); }
+.preview-copy {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--signal);
+  color: var(--paper);
+  border: 0;
+  border-radius: 3px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.preview-copy:hover { background: var(--signal-dim); }
+
 /* ---- print ----
    Recruiters print and paste. Always on white, whatever the screen was. */
 
