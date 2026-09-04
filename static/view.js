@@ -52,38 +52,57 @@ function railView(state, ui) {
   };
 }
 
-/** The work area: the active project's log, grouped and numbered. */
-function activeView(state, ui, project) {
-  const entries = state.achievements.filter((entry) => entry.projectId === project.id);
-
-  const rows = entries.map((entry, position) => ({
+/**
+ * Flat log rows: the sequence number and the side column, in stored order.
+ *
+ * Shared by `activeView` and `snapshotView` (static/snapshot-view.js) — the
+ * numbering and grouping-key rules are one mechanism regardless of which page
+ * is asking, and which fields a caller layers on top (move affordances, in
+ * the app's case) is the only thing that differs between them.
+ */
+export function logRows(entries, grouping) {
+  return entries.map((entry, position) => ({
     entry,
     /* Ascending log number, so the first record ever written stays 01. */
     sequence: entries.length - position,
     /* The side column shows whichever of milestone and date the log is not
        already grouped by. */
-    aside: ui.grouping === 'date' ? (entry.milestone || '—') : formatStamp(entry.date),
+    aside: grouping === 'date' ? (entry.milestone || '—') : formatStamp(entry.date),
+  }));
+}
+
+/** Those rows bucketed for display. */
+export function groupLogRows(rows, grouping) {
+  const buckets = new Map();
+  for (const row of rows) {
+    const key = grouping === 'date' ? row.entry.date : (row.entry.milestone || 'Unassigned');
+    buckets.set(key, [...(buckets.get(key) ?? []), row]);
+  }
+
+  return [...buckets].map(([key, groupRows]) => ({
+    key,
+    label: grouping === 'date' ? formatStamp(key) : key,
+    count: groupRows.length,
+    rows: groupRows,
+  }));
+}
+
+/** The work area: the active project's log, grouped and numbered. */
+function activeView(state, ui, project) {
+  const entries = state.achievements.filter((entry) => entry.projectId === project.id);
+
+  const rows = logRows(entries, ui.grouping).map((row, position) => ({
+    ...row,
     canMoveUp: position > 0,
     canMoveDown: position < entries.length - 1,
   }));
-
-  const buckets = new Map();
-  for (const row of rows) {
-    const key = ui.grouping === 'date' ? row.entry.date : (row.entry.milestone || 'Unassigned');
-    buckets.set(key, [...(buckets.get(key) ?? []), row]);
-  }
 
   return {
     project,
     startedStamp: formatStamp(project.startedOn),
     updatedStamp: formatStamp(project.updatedAt.slice(0, 10)),
     entryCount: entries.length,
-    groups: [...buckets].map(([key, groupRows]) => ({
-      key,
-      label: ui.grouping === 'date' ? formatStamp(key) : key,
-      count: groupRows.length,
-      rows: groupRows,
-    })),
+    groups: groupLogRows(rows, ui.grouping),
   };
 }
 
