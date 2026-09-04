@@ -56,3 +56,63 @@ export function snapshotFrom(state, projectId, options = {}) {
     })),
   };
 }
+
+/* ------------------------------------------------------------------ codec */
+
+/* base64 is defined over bytes but `btoa` is defined over a string of char
+   codes, so these two conversions are the only place a payload is handled as
+   anything but bytes. Reaching for `TextEncoder` here instead would silently
+   mangle every character outside Latin-1. */
+
+function toBase64Url(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(text) {
+  const binary = atob(text.replaceAll('-', '+').replaceAll('_', '/'));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+async function pipeBytes(bytes, stream) {
+  const writer = stream.writable.getWriter();
+  /* Both halves of a transform stream reject when the input is bad. Nothing
+     awaits the writer, so its rejections are swallowed here and the reader
+     below is left to report the failure — otherwise a corrupt payload takes
+     the page down with an unhandled rejection instead of showing a refusal. */
+  writer.write(bytes).catch(() => {});
+  writer.close().catch(() => {});
+
+  const chunks = [];
+  const reader = stream.readable.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
+/** A snapshot as a URL-safe payload. Raw deflate: no header, no checksum. */
+export async function encodeSnapshot(snapshot) {
+  const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+  return toBase64Url(await pipeBytes(bytes, new CompressionStream('deflate-raw')));
+}
+
+/** The payload back as data, or a rejection. Says nothing about what it holds. */
+export async function decodeSnapshot(payload) {
+  const bytes = fromBase64Url(payload);
+  const inflated = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
+  return JSON.parse(new TextDecoder().decode(inflated));
+}
