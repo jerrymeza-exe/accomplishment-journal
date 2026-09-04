@@ -19,6 +19,7 @@ import {
   quarantineJournal as quarantineLocalJournal,
   saveJournal,
 } from './journal.js';
+import { encodeSnapshot, snapshotFrom } from './snapshot.js';
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -30,6 +31,34 @@ const pad = (value) => String(value).padStart(2, '0');
 function toLocalDateInput(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+/* The owner's name is not a journal fact — CONTEXT.md defines a journal as
+   projects and entries — so it is kept beside the journal rather than in it.
+   Putting it in the state would mean a version 4 format, a migration on both
+   builds, and a default for every backup ever written, all for one string. */
+const AUTHOR_KEY = 'accomplishment-journal-author';
+
+function ownerName() {
+  let stored;
+  try {
+    stored = localStorage.getItem(AUTHOR_KEY);
+  } catch {
+    stored = null;
+  }
+  if (stored !== null) return stored;
+
+  const asked = window.prompt('What name should appear on shared logs? Leave it blank to share without one.', '');
+  if (asked === null) return null;
+
+  const name = asked.trim();
+  try {
+    localStorage.setItem(AUTHOR_KEY, name);
+  } catch {
+    /* A browser refusing storage should not block the share; the name is
+       simply asked for again next time. */
+  }
+  return name;
 }
 
 function downloadFile(name, blob) {
@@ -82,6 +111,10 @@ function currentView() {
 function renderTopbar(view = currentView()) {
   refs.topbarNow.textContent = view.active?.project.name ?? 'No project selected';
   refs.opCsv.disabled = !view.active;
+  /* A project with no entries makes a page that reads "this person has no
+     accomplishments". The same distinction railView draws between `no-match`
+     and `no-projects`: empty and broken are not the same state. */
+  refs.opShare.disabled = !CAN_SHARE || !view.active || view.active.entryCount === 0;
 }
 
 function renderRail(view = currentView()) {
@@ -555,6 +588,36 @@ async function exportCsv() {
   }
 }
 
+/* Stage 1 ships snapshots on the hosted build only. The local build needs
+   app.py to serve share.html and to say where the published page lives;
+   until then the button would produce a preview that 404s. */
+const CAN_SHARE = HOSTED_ON_PAGES;
+
+async function shareProject() {
+  const { active } = currentView();
+  if (!active) { setNotice('Choose a project before sharing it.'); return; }
+  if (!active.entryCount) { setNotice('Record an entry before sharing this project.'); return; }
+
+  const who = ownerName();
+  if (who === null) return;
+
+  try {
+    const snapshot = snapshotFrom(app.state, active.project.id, { who, grouping: app.grouping });
+    const payload = await encodeSnapshot(snapshot);
+    const url = new URL('share.html', window.location.href);
+    url.searchParams.set('preview', '1');
+
+    /* The preview is opened, never the link itself, and the link is copied
+       from that page rather than from here. A snapshot cannot be withdrawn,
+       so the only moment to see what is in it is before it exists anywhere. */
+    const opened = window.open(`${url.toString()}#${payload}`, '_blank');
+    if (!opened) { setNotice('Allow pop-ups for this page to preview a shared log.'); return; }
+    setNotice('Preview opened. Copy the link from that page to share it.');
+  } catch (error) {
+    setNotice(error instanceof Error ? error.message : 'That project could not be shared.');
+  }
+}
+
 async function importBackup(event) {
   const file = event.target.files?.[0];
   event.target.value = '';
@@ -628,6 +691,7 @@ function bindEvents() {
   refs.opBackup.addEventListener('click', exportBackup);
   refs.opRestore.addEventListener('click', () => refs.importInput.click());
   refs.opCsv.addEventListener('click', exportCsv);
+  refs.opShare.addEventListener('click', shareProject);
   refs.importInput.addEventListener('change', importBackup);
   refs.noticeClose.addEventListener('click', () => setNotice(''));
 
@@ -711,6 +775,7 @@ function init() {
   refs.opBackup = $('#op-backup');
   refs.opRestore = $('#op-restore');
   refs.opCsv = $('#op-csv');
+  refs.opShare = $('#op-share');
   refs.importInput = $('#import');
   refs.work = $('#work');
   refs.notice = $('#notice');
