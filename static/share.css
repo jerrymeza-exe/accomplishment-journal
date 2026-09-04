@@ -1,0 +1,176 @@
+/* Accomplishment Journal — the shared log.
+ *
+ * Self-contained on purpose. The app's stylesheet pulls Inter and JetBrains
+ * Mono from Google, which is the owner's business on the owner's machine and
+ * nobody else's on a page the owner sent to a stranger. System stacks only.
+ *
+ * Light by default where app.css is near-black: this is a document somebody
+ * may print or paste into a form, not a writing surface.
+ */
+
+:root {
+  --paper:      #fbfbfa;
+  --raised:     #ffffff;
+  --line:       #e3e2df;
+  --line-2:     #cfceca;
+  --ink:        #16181a;
+  --ink-2:      #45494d;
+  --ink-3:      #6f7479;
+  --signal:     #5e6825;
+  --signal-dim: #8a9640;
+
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:  #0a0b0c;
+    --raised: #0e1012;
+    --line:   #1c1f22;
+    --line-2: #2d3135;
+    --ink:    #e9eaeb;
+    --ink-2:  #b7bbbe;
+    --ink-3:  #7d8286;
+    --signal: #d3e04f;
+    --signal-dim: #96a337;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.sheet {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 56px 24px 24px;
+}
+
+/* ---- header ---- */
+
+.head { border-bottom: 1px solid var(--line-2); padding-bottom: 24px; }
+.head-who { margin: 0 0 6px; }
+.head h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+.head-desc { margin: 12px 0 0; color: var(--ink-2); max-width: 34rem; }
+.head-meta { margin: 18px 0 0; display: flex; gap: 20px; flex-wrap: wrap; }
+
+/* ---- groups and entries ---- */
+
+.group { margin-top: 40px; }
+.group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.group-head b { color: var(--ink-2); font-weight: 500; }
+
+.entry { padding: 22px 0; border-bottom: 1px solid var(--line); }
+.entry:last-child { border-bottom: 0; }
+.entry-top { display: flex; align-items: baseline; gap: 12px; }
+.entry-seq { color: var(--signal-dim); }
+.entry-aside { margin-left: auto; }
+.entry h2 {
+  margin: 6px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ---- refusals (Task 6) ---- */
+
+.refusal { max-width: 32rem; margin: 12vh auto; text-align: center; }
+.refusal h1 { font-size: 20px; font-weight: 600; margin: 0 0 12px; }
+.refusal p { color: var(--ink-2); margin: 0; }
+
+/* ---- footer ---- */
+
+.foot {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 32px 24px 56px;
+  border-top: 1px solid var(--line);
+}
+.foot p { margin: 0; text-transform: none; letter-spacing: 0.02em; }
+
+/* ---- prose ----
+   The log is written in the app's Markdown subset, so these mirror the
+   `.prose` rules in app.css. They are restated rather than imported because
+   importing app.css would pull in Google Fonts and the whole dark ground. */
+
+.prose { color: var(--ink-2); }
+.prose > * + * { margin-top: 12px; }
+.prose h1, .prose h2, .prose h3 { color: var(--ink); font-weight: 600; letter-spacing: -0.01em; margin: 20px 0 0; }
+.prose h1 { font-size: 19px; }
+.prose h2 { font-size: 16.5px; }
+.prose h3 { font-size: 14.5px; }
+.prose ul, .prose ol { padding-left: 18px; margin-bottom: 0; }
+.prose li { margin-top: 4px; padding-left: 4px; }
+.prose li::marker { color: var(--ink-3); }
+.prose blockquote {
+  margin: 12px 0 0;
+  border-left: 2px solid var(--line-2);
+  padding-left: 14px;
+  color: var(--ink-3);
+}
+.prose code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.prose pre {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.prose pre code { background: none; border: 0; padding: 0; }
+.prose a { color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
+.prose strong { color: var(--ink); font-weight: 600; }
+
+/* ---- print ----
+   Recruiters print and paste. Always on white, whatever the screen was. */
+
+@media print {
+  :root {
+    --paper: #ffffff; --raised: #ffffff;
+    --line: #d8d8d4; --line-2: #b4b4b0;
+    --ink: #000000; --ink-2: #1f2124; --ink-3: #4a4d50;
+    --signal: #3f4718; --signal-dim: #5e6825;
+  }
+  body { font-size: 11pt; }
+  .sheet { max-width: none; padding: 0; }
+  .foot { border-top: 1px solid var(--line); padding: 12px 0 0; }
+  .preview-bar { display: none !important; }
+  .group, .entry { break-inside: avoid; }
+  .group-head { break-after: avoid; }
+  .prose a { color: inherit; }
+}
