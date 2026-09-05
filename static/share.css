@@ -143,6 +143,10 @@ body {
   padding-left: 14px;
   color: var(--ink-3);
 }
+/* markdown.js emits one <p> per quoted line inside a blockquote, so without
+   this the lines of a multi-line quotation run together after the element
+   margin reset above. */
+.prose blockquote > * + * { margin-top: 10px; }
 .prose code {
   font-family: var(--mono);
   font-size: 0.9em;
