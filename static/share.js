@@ -126,13 +126,29 @@ function renderPreviewBar(params) {
 
 async function start() {
   const result = await readSnapshot(window.location.hash);
-  if (result.ok) renderSnapshot(result.snapshot);
-  else renderRefusal(result.reason);
+
+  /* ADR-0004: this page shows a complete snapshot or a named refusal, and
+     nothing in between. `renderSnapshot` sets the tab title before it fills
+     the sheet, so a throw while building nodes would otherwise leave the
+     project's name above an empty page and the footer's disclaimer under it —
+     a recruiter reading a short career that is really a broken render, with
+     nothing but an unhandled rejection to say so. */
+  let rendered = false;
+  if (result.ok) {
+    try {
+      renderSnapshot(result.snapshot);
+      rendered = true;
+    } catch {
+      renderRefusal('unreadable');
+    }
+  } else {
+    renderRefusal(result.reason);
+  }
 
   /* The bar goes up only for a snapshot that actually rendered: offering to
      copy a link that just refused to open is offering to send a broken one. */
   const params = new URLSearchParams(window.location.search);
-  if (result.ok && params.get('preview') === '1') renderPreviewBar(params);
+  if (rendered && params.get('preview') === '1') renderPreviewBar(params);
 }
 
 start();
