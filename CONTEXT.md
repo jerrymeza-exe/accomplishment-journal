@@ -1,4 +1,4 @@
-# Accomplishment Journal
+﻿# Accomplishment Journal
 
 A local-first record of completed work, kept on one person’s own machine.
 
@@ -53,3 +53,4 @@ empty journal.
 **Quarantine**  
 Moving an unreadable journal aside under a recoverable name so a new journal can
 be started without destroying the old file.
+

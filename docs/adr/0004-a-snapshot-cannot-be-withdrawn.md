@@ -20,6 +20,16 @@ recruiter something false about the person who sent it, and neither of them
 finds out. `readSnapshot` validates every field and answers with a named
 reason, so the page can say which of the four failures happened.
 
+## Consequences
+
+- Every payload version this journal has published stays readable; `READERS`
+  in `static/snapshot.js` only ever gains entries.
+- A snapshot that cannot be read in full is refused by name, never partially
+  rendered.
+- A link that has been sent cannot be recalled, so the preview is the only
+  moment its contents can be checked.
+- The journal keeps no record of which snapshots were made or when.
+
 ## What this decision is not
 
 It is not a duplication of a journal rule, and ADR-0002 still holds. Encoding
