@@ -23,12 +23,35 @@ completion targets, workflow stages, or performance scoring.
 
 The `main` branch publishes the contents of `static/` with GitHub Pages through
 the workflow in `.github/workflows/pages.yml`. No journal entries are published
-to GitHub: each browser stores its own copy locally. Use **Backup** on one device
-and **Restore** on another when you want to transfer your journal.
+to GitHub: each browser stores its own copy locally, and a shared snapshot
+travels inside the link rather than through this repository. Use **Backup** on
+one device and **Restore** on another when you want to transfer your journal.
 
 Older version 1 and version 2 backups still import. Their writing, dates,
 milestones, tags, and project details are preserved and normalized into the
 current version 3 journal format.
+
+## Share one project
+
+**Share** builds a *snapshot*: a frozen copy of one project's log, encoded
+into the link itself. A snapshot cannot be changed or withdrawn once sent, and
+editing the journal afterwards never changes a link already sent.
+
+The journal content rides in the link's fragment, which browsers never
+transmit to a server — so GitHub never receives it, nothing is committed to
+this repository, and the recipient needs nothing installed.
+
+Sharing always opens a preview first. That preview is the recipient's page,
+and the link is copied from it, so nothing can be sent unlooked-at.
+
+A snapshot carries the project's name, description and start date, the owner's
+name, and each entry's title, date, milestone and writing. It deliberately
+carries no internal identifiers, no created or updated timestamps, and no
+project tags.
+
+Long links are the one limitation: roughly ten entries of prose reaches 2,000
+characters, and some email programs break links longer than that by wrapping
+them. The preview warns when a link crosses that line.
 
 ## Run locally
 

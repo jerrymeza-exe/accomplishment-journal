@@ -28,6 +28,12 @@ they do not score or evaluate the work.
 **Backup**  
 A portable JSON file containing the complete journal.
 
+**Snapshot**  
+A frozen, self-contained copy of one project's accomplishment log, encoded
+into a link. A snapshot is made for one named person. It cannot be changed or
+withdrawn once it is sent, and the journal it came from can change afterwards
+without changing it.
+
 ## Changing a journal
 
 **Operation**  
