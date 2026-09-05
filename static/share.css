@@ -39,6 +39,12 @@
 
 * { box-sizing: border-box; }
 
+/* The `.prose` rules below were written against app.css's global reset. Without
+   it, UA margins on markdown-generated paragraphs and quotes break the entry
+   rhythm and shorten the blockquote rule. */
+h1, h2, h3, h4, p, pre, blockquote { margin: 0; }
+ul, ol { margin: 0; }
+
 body {
   margin: 0;
   background: var(--paper);
@@ -128,7 +134,7 @@ body {
 .prose h1 { font-size: 19px; }
 .prose h2 { font-size: 16.5px; }
 .prose h3 { font-size: 14.5px; }
-.prose ul, .prose ol { padding-left: 18px; margin-bottom: 0; }
+.prose ul, .prose ol { padding-left: 18px; }
 .prose li { margin-top: 4px; padding-left: 4px; }
 .prose li::marker { color: var(--ink-3); }
 .prose blockquote {
