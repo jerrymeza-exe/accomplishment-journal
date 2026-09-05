@@ -53,6 +53,11 @@ Long links are the one limitation: roughly ten entries of prose reaches 2,000
 characters, and some email programs break links longer than that by wrapping
 them. The preview warns when a link crosses that line.
 
+Running locally, Share needs to know where your published page lives, since the
+link has to work for somebody who is not at your machine. It is derived from a
+GitHub `origin` remote, or set explicitly with `--share-base`. With neither,
+Share stays disabled and the startup banner says so.
+
 ## Run locally
 
 1. Install Python 3.10 or later. No third-party packages are required.

@@ -131,6 +131,13 @@ Stated here so they are chosen rather than discovered.
   against script injection — `markdown.js` allowlists URL schemes and builds
   DOM nodes rather than assigning `innerHTML` — but not against content
   spoofing on a domain carrying the owner's name.
+- `preview=1` and `base` are query parameters anyone can supply, so a crafted
+  link can raise a preview bar and a Copy link button pointing anywhere. A
+  static page cannot tell the sender's own preview from someone else's, and the
+  reach is bounded by the content-spoofing trade-off above it.
+- A hostile payload's inflated size is capped, far above anything a real log
+  reaches; past the ceiling the page refuses rather than inflating. Resource
+  exhaustion is a chosen limit rather than an open question.
 - The owner gets no record of what was sent or when.
 
 ## Out of scope for v1
