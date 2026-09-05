@@ -93,6 +93,22 @@ test('a project with no entries cannot be snapshotted', () => {
   assert.throws(() => snapshotFrom(state, 'project-a', {}), /no entries/);
 });
 
+/* `readVersion1` already refuses a blank body, and both stores accept one from
+   an imported v3 backup. Without the writer's check the sender gets a perfectly
+   good link the preview then calls incomplete — telling them it broke in
+   transit and to resend, when the only fix is back in the journal. */
+test('an entry with nothing written in it cannot be snapshotted', () => {
+  for (const body of ['', '   \n\t ']) {
+    const state = journal();
+    state.achievements[1].markdown = body;
+    assert.throws(
+      () => snapshotFrom(state, 'project-a', {}),
+      /no writing cannot be shared/,
+      `expected ${JSON.stringify(body)} to be refused before a link exists`,
+    );
+  }
+});
+
 test('a snapshot survives a round trip through a payload', async () => {
   const snapshot = snapshotFrom(journal(), 'project-a', { who: 'G', grouping: 'milestone' });
   const payload = await encodeSnapshot(snapshot);
@@ -122,6 +138,35 @@ test('a payload that is not a payload is rejected', async () => {
   for (const bad of ['', 'not-a-real-payload', 'AAAA']) {
     await assert.rejects(() => decodeSnapshot(bad), `expected ${JSON.stringify(bad)} to be rejected`);
   }
+});
+
+/* Built by compressing straight to a payload rather than through
+   `encodeSnapshot`, because no journal produces this: 6 MB of one repeated byte
+   deflates to a comfortably mailable link that inflates back past the cap. The
+   cost of not capping falls entirely on whoever opened the link — the one
+   person who can do nothing about it — so it answers with the existing
+   `unreadable`, adding no fifth reason. */
+test('a payload that inflates past the cap is refused rather than allocated', async () => {
+  const stream = new CompressionStream('deflate-raw');
+  const writer = stream.writable.getWriter();
+  writer.write(new Uint8Array(6 * 1024 * 1024)).catch(() => {});
+  writer.close().catch(() => {});
+
+  const chunks = [];
+  const reader = stream.readable.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(Buffer.from(value));
+  }
+  const payload = Buffer.concat(chunks).toString('base64url');
+
+  assert.ok(payload.length < 10000, `a ${payload.length}-character link would sail through email`);
+  /* Matched on the cap's own message, not just on rejecting: without the cap
+     this payload inflates in full and JSON.parse rejects it anyway, which would
+     make the assertion pass while proving nothing about the ceiling. */
+  await assert.rejects(() => decodeSnapshot(payload), /expands to far more/);
+  assert.deepEqual(await readSnapshot(payload), { ok: false, reason: 'unreadable' });
 });
 
 /* The mail-client truncation case, which is the one that will actually
@@ -206,6 +251,22 @@ test('a browser with no DecompressionStream is told so, not shown a broken page'
     assert.deepEqual(await readSnapshot('anything'), { ok: false, reason: 'unsupported-browser' });
   } finally {
     globalThis.DecompressionStream = real;
+  }
+});
+
+/* The mirror image on the writing side. Without the guard the owner clicks
+   Share and gets `CompressionStream is not defined` in the notice bar, which
+   reads as a broken app rather than an old browser. */
+test('a browser with no CompressionStream says so instead of a ReferenceError', async () => {
+  const real = globalThis.CompressionStream;
+  delete globalThis.CompressionStream;
+  try {
+    await assert.rejects(
+      () => encodeSnapshot(snapshotFrom(journal(), 'project-a', {})),
+      /browser from 2023 or later/,
+    );
+  } finally {
+    globalThis.CompressionStream = real;
   }
 });
 

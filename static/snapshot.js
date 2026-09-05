@@ -39,6 +39,14 @@ export function snapshotFrom(state, projectId, options = {}) {
   const entries = state.achievements.filter((entry) => entry.projectId === project.id);
   if (!entries.length) throw new Error('A project with no entries has nothing to share.');
 
+  /* `readVersion1` refuses a blank body, and both stores accept one from an
+     imported v3 backup. Without this the sender gets a well-formed link the
+     preview then rejects as "incomplete" — blaming the mail client for a
+     journal the sender could have fixed before the link existed. */
+  if (entries.some((entry) => !cleanText(entry.markdown))) {
+    throw new Error('An entry with no writing cannot be shared. Add a log entry, or share a different project.');
+  }
+
   return {
     version: SNAPSHOT_VERSION,
     who: cleanText(options.who),
@@ -77,7 +85,14 @@ function fromBase64Url(text) {
   return bytes;
 }
 
-async function pipeBytes(bytes, stream) {
+/* A payload is a few kilobytes; a hostile one can inflate without bound and
+   hang the tab of whoever opened the link. Refusing past a ceiling no real
+   journal approaches keeps a crafted link from costing the reader anything. */
+const MAX_INFLATED_BYTES = 4 * 1024 * 1024;
+
+/* `limit` guards the decode path only. Encoding is the owner's own journal on
+   the owner's own machine, and capping it would refuse a long career. */
+async function pipeBytes(bytes, stream, limit = Infinity) {
   const writer = stream.writable.getWriter();
   /* Both halves of a transform stream reject when the input is bad. Nothing
      awaits the writer, so its rejections are swallowed here and the reader
@@ -88,13 +103,20 @@ async function pipeBytes(bytes, stream) {
 
   const chunks = [];
   const reader = stream.readable.getReader();
+  let total = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
+    total += value.length;
+    /* Checked as chunks arrive rather than at the end: the whole point is to
+       never allocate what a crafted payload asked for. */
+    if (total > limit) {
+      reader.cancel().catch(() => {});
+      throw new Error('This link expands to far more than a shared log ever holds.');
+    }
     chunks.push(value);
   }
 
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
   const out = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
@@ -106,6 +128,12 @@ async function pipeBytes(bytes, stream) {
 
 /** A snapshot as a URL-safe payload. Raw deflate: no header, no checksum. */
 export async function encodeSnapshot(snapshot) {
+  /* `readSnapshot` answers `unsupported-browser` when DecompressionStream is
+     missing. Without the mirror image here, an owner on a pre-2023 browser gets
+     a raw ReferenceError in the notice bar instead of a sentence. */
+  if (typeof CompressionStream !== 'function') {
+    throw new Error('Sharing needs a browser from 2023 or later — Chrome 80, Safari 16.4, Firefox 113, or anything newer.');
+  }
   const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
   return toBase64Url(await pipeBytes(bytes, new CompressionStream('deflate-raw')));
 }
@@ -113,7 +141,7 @@ export async function encodeSnapshot(snapshot) {
 /** The payload back as data, or a rejection. Says nothing about what it holds. */
 export async function decodeSnapshot(payload) {
   const bytes = fromBase64Url(payload);
-  const inflated = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
+  const inflated = await pipeBytes(bytes, new DecompressionStream('deflate-raw'), MAX_INFLATED_BYTES);
   return JSON.parse(new TextDecoder().decode(inflated));
 }
 
