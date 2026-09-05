@@ -65,8 +65,27 @@ def test_declines_to_guess() -> None:
     check("declines a directory with no .git", app.pages_url_from_git_config(Path(tempfile.mkdtemp())) is None)
 
 
+def test_resolve_share_base() -> None:
+    remote = with_remote("https://github.com/jerrymeza-exe/accomplishment-journal.git")
+    derived = "https://jerrymeza-exe.github.io/accomplishment-journal/share.html"
+
+    got = app.resolve_share_base(None, remote)
+    check("derives when nothing was passed", got == derived, f"got {got!r}")
+
+    # An explicit empty string is how someone turns sharing off, not a missing
+    # value. The old `args.share_base or pages_url_from_git_config() or ""`
+    # chain treated "" as falsy and silently fell through to the derived URL,
+    # re-enabling the very thing the user just asked to disable.
+    got = app.resolve_share_base("", remote)
+    check("an explicit empty string disables sharing", got == "", f"got {got!r}")
+
+    custom = "https://custom.example/share.html"
+    got = app.resolve_share_base(custom, remote)
+    check("an explicit URL overrides derivation", got == custom, f"got {got!r}")
+
+
 def main() -> int:
-    for test in (test_derives_the_pages_url, test_declines_to_guess):
+    for test in (test_derives_the_pages_url, test_declines_to_guess, test_resolve_share_base):
         print(f"{test.__name__}")
         test()
     print(f"\n{PASS} passed, {FAIL} failed")

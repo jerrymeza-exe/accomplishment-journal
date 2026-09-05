@@ -89,6 +89,18 @@ def pages_url_from_git_config(base_dir: str | os.PathLike[str] = BASE_DIR) -> st
     return f"https://{owner}.github.io/{repo}/share.html"
 
 
+def resolve_share_base(explicit: str | None, base_dir: str | os.PathLike[str] = BASE_DIR) -> str:
+    """The share base to serve, given whatever ``--share-base`` was passed.
+
+    An explicit empty string is a decision, not a missing value: it is how
+    someone turns sharing off. Collapsing it into the derived URL with ``or``
+    would silently re-enable the button they just asked to remove.
+    """
+    if explicit is not None:
+        return explicit
+    return pages_url_from_git_config(base_dir) or ""
+
+
 def journal_payload(state: dict, **extra) -> dict:
     """A reply carrying the journal and any operation metadata."""
     return {"state": state, **extra}
@@ -347,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     global SHARE_BASE
-    SHARE_BASE = args.share_base or pages_url_from_git_config() or ""
+    SHARE_BASE = resolve_share_base(args.share_base)
 
     ThreadingHTTPServer.daemon_threads = True
     try:

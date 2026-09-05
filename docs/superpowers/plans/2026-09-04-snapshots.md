@@ -1811,11 +1811,27 @@ In `main`, after `args = parser.parse_args(argv)`:
     )
 ```
 
-(place that with the other `add_argument` calls), and after parsing:
+(place that with the other `add_argument` calls). Extract the resolution into
+a testable function, placed right after `pages_url_from_git_config`:
+
+```python
+def resolve_share_base(explicit: str | None, base_dir: str | os.PathLike[str] = BASE_DIR) -> str:
+    """The share base to serve, given whatever ``--share-base`` was passed.
+
+    An explicit empty string is a decision, not a missing value: it is how
+    someone turns sharing off. Collapsing it into the derived URL with ``or``
+    would silently re-enable the button they just asked to remove.
+    """
+    if explicit is not None:
+        return explicit
+    return pages_url_from_git_config(base_dir) or ""
+```
+
+and use it in `main`, after parsing:
 
 ```python
     global SHARE_BASE
-    SHARE_BASE = args.share_base or pages_url_from_git_config() or ""
+    SHARE_BASE = resolve_share_base(args.share_base)
 ```
 
 And in the startup banner, after the data-file line:
