@@ -91,6 +91,11 @@ const app = {
   locked: false,
 };
 
+/* The hosted build sits next to its own share.html; the local build has to be
+   told where the published one is, because the link it copies has to work for
+   somebody who is not on this machine. */
+let shareBase = '';
+
 /* Draft mirrors while a form is open; the stable inputs hold the values. */
 const projectForm = { name: '', description: '', startedOn: '', tags: '' };
 const entryForm = { projectId: '', title: '', date: '', milestone: '', markdown: '' };
@@ -114,7 +119,7 @@ function renderTopbar(view = currentView()) {
   /* A project with no entries makes a page that reads "this person has no
      accomplishments". The same distinction railView draws between `no-match`
      and `no-projects`: empty and broken are not the same state. */
-  refs.opShare.disabled = !CAN_SHARE || !view.active || view.active.entryCount === 0;
+  refs.opShare.disabled = !(HOSTED_ON_PAGES || shareBase) || !view.active || view.active.entryCount === 0;
 }
 
 function renderRail(view = currentView()) {
@@ -588,11 +593,6 @@ async function exportCsv() {
   }
 }
 
-/* Stage 1 ships snapshots on the hosted build only. The local build needs
-   app.py to serve share.html and to say where the published page lives;
-   until then the button would produce a preview that 404s. */
-const CAN_SHARE = HOSTED_ON_PAGES;
-
 async function shareProject() {
   const { active } = currentView();
   if (!active) { setNotice('Choose a project before sharing it.'); return; }
@@ -606,6 +606,10 @@ async function shareProject() {
     const payload = await encodeSnapshot(snapshot);
     const url = new URL('share.html', window.location.href);
     url.searchParams.set('preview', '1');
+    /* Locally the preview is served from this machine while the link points at
+       the published page, so the preview says which is which rather than
+       letting the sender assume the address bar is the link. */
+    if (!HOSTED_ON_PAGES && shareBase) url.searchParams.set('base', shareBase);
 
     /* The preview is opened, never the link itself, and the link is copied
        from that page rather than from here. A snapshot cannot be withdrawn,
@@ -670,6 +674,8 @@ async function hydrate() {
         else throw new Error('The local server did not answer.');
       } else {
         adopt(payload);
+        const config = await fetch('/api/config').then((answer) => answer.json()).catch(() => ({}));
+        shareBase = config.shareBase ?? '';
       }
     }
   } catch (error) {

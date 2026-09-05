@@ -31,9 +31,11 @@ Design notes
 from __future__ import annotations
 
 import argparse
+import configparser
 import json
 import mimetypes
 import os
+import re
 import webbrowser
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -56,6 +58,35 @@ JOURNAL = store.JournalStore(DATA_FILE)
 # Sent with every 409 so the browser can tell "your journal is unreadable"
 # apart from an ordinary validation complaint and offer the recovery action.
 UNREADABLE_CODE = "journal-unreadable"
+
+# Where this journal's published share page lives. Only the local build needs
+# this: the hosted build is already sitting next to its own share.html.
+SHARE_BASE = ""
+
+GITHUB_REMOTE = re.compile(r"^(?:https://github\.com/|git@github\.com:)([^/]+)/(.+?)(?:\.git)?$")
+
+
+def pages_url_from_git_config(base_dir: str | os.PathLike[str] = BASE_DIR) -> str | None:
+    """The published share page this repository would deploy to, if it can be told.
+
+    A guess that is wrong produces a link that 404s in someone else's inbox,
+    which nobody reports back, so anything that is not plainly a GitHub remote
+    answers ``None`` and leaves it to ``--share-base``.
+    """
+    config_path = os.path.join(base_dir, ".git", "config")
+    parser = configparser.ConfigParser()
+    try:
+        if not parser.read(config_path, encoding="utf-8"):
+            return None
+        url = parser.get('remote "origin"', "url", fallback="").strip()
+    except (configparser.Error, OSError, UnicodeDecodeError):
+        return None
+
+    match = GITHUB_REMOTE.match(url)
+    if not match:
+        return None
+    owner, repo = match.group(1), match.group(2)
+    return f"https://{owner}.github.io/{repo}/share.html"
 
 
 def journal_payload(state: dict, **extra) -> dict:
@@ -171,12 +202,16 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_static(path[len("/static/"):])
             return
         # The page uses relative asset URLs so the same files also work from
-        # a GitHub Pages project subpath.
-        if path.count("/") == 1 and path.rsplit(".", 1)[-1] in {"css", "js"}:
+        # a GitHub Pages project subpath, and share.html sits at the root
+        # there too.
+        if path.count("/") == 1 and path.rsplit(".", 1)[-1] in {"css", "js", "html"}:
             self._serve_static(path[1:])
             return
         if path == "/healthz":
             self._send_json(200, {"ok": True})
+            return
+        if path == "/api/config":
+            self._send_json(200, {"shareBase": SHARE_BASE})
             return
         if path == "/api/state":
             state = self._current_state()
@@ -304,7 +339,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1", help="Interface to bind (default: 127.0.0.1, local only).")
     parser.add_argument("--port", type=int, default=3000, help="Port to listen on (default: 3000).")
     parser.add_argument("--no-browser", action="store_true", help="Do not open a browser tab on start.")
+    parser.add_argument(
+        "--share-base",
+        default=None,
+        help="URL of the published share page (default: derived from the git origin, if it is a GitHub remote).",
+    )
     args = parser.parse_args(argv)
+
+    global SHARE_BASE
+    SHARE_BASE = args.share_base or pages_url_from_git_config() or ""
 
     ThreadingHTTPServer.daemon_threads = True
     try:
@@ -319,6 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Accomplishment Journal")
     print(f"  Listening: {url}")
     print(f"  Data file: {os.path.relpath(DATA_FILE, os.getcwd())}")
+    print(f"  Share base: {SHARE_BASE or 'not set — pass --share-base to enable sharing'}")
     print("  Ctrl+C to stop.")
     if not args.no_browser:
         webbrowser.open(url)

@@ -70,6 +70,7 @@ Useful flags:
 python app.py --port 3001
 python app.py --no-browser
 python app.py --host 0.0.0.0
+python app.py --share-base https://you.github.io/accomplishment-journal/share.html
 ```
 
 The default address is local to this machine. Keep sensitive, proprietary,
@@ -105,6 +106,7 @@ so earlier journal files and integrations remain readable.
 | `GET` | `/api/export/csv?project=<id>` | Download one project as CSV |
 | `POST` | `/api/journal/quarantine` | Move an unreadable journal aside |
 | `GET` | `/healthz` | Check that the local server is running |
+| `GET` | `/api/config` | Read the local server's share settings |
 
 Supported operations are `create_project`, `update_project`, `delete_project`,
 `record_entry`, `update_entry`, `delete_entry`, and `move_entry`.
